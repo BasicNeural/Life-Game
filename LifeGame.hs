@@ -67,7 +67,7 @@ display worldRef tickRef speedRef counterRef = do
         mapM_ (\(x, y) -> vertex $ Vertex2 (x / 40) (y / 40)) world
     
     rasterPos (Vertex2 0.5 (-0.98) :: Vertex2 Float)
-    renderString Fixed8By13 $ "Speed : " ++ show speed
+    renderString Fixed8By13 $ "Speed : " ++ init (show (1 / speed))
     
     flush
 
