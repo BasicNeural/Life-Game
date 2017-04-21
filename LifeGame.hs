@@ -65,6 +65,10 @@ display worldRef tickRef speedRef counterRef = do
 
     renderPrimitive Points $
         mapM_ (\(x, y) -> vertex $ Vertex2 (x / 40) (y / 40)) world
+    
+    rasterPos (Vertex2 0.5 (-0.98) :: Vertex2 Float)
+    renderString Fixed8By13 $ "Speed : " ++ show speed
+    
     flush
 
 timerProc act = do
@@ -73,6 +77,6 @@ timerProc act = do
 
 keyboardProc speed ch state _ _
     | ch == Char 'q' = exitWith ExitSuccess
-    | ch == Char 'a' = modifyIORef speed (*2.0)
-    | ch == Char 'd' = modifyIORef speed (/2.0)
+    | ch == Char 'a' && state == Down = modifyIORef speed (*2.0)
+    | ch == Char 'd' && state == Down = modifyIORef speed (/2.0)
     | otherwise      = return ()
