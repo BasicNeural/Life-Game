@@ -4,6 +4,9 @@ import System.Exit
 import Data.IORef
 import Data.Time
 import Control.Exception
+import qualified Data.Sequence              as S
+import qualified Data.Foldable              as F
+import qualified Data.ByteString.Lazy.Char8 as BS
 
 timerInterval = 17
 
@@ -20,48 +23,41 @@ execute world = filter (\(x,y) -> abs x < 40 && abs y < 40)
           willAlive f x = f $ nearCell world x
 
 main = do
+
+    rawdata <- fmap BS.lines $ BS.readFile ".\\seed.csv"
+
+    let set = map (map BS.unpack . BS.split ',') rawdata
+
+    let centerList = head set
+    let seedList = tail set
+
+    let (x,y) = ( read (centerList !! 0) :: Double , read (centerList !! 1) :: Double )
+    let seed = concat . map (\(x,ys) -> zip (iterate (\x->x) x) ys) . zip [0..] 
+                $ map (map fst . filter (\(_,x) -> x /= "") . zip [0..]) seedList
+    
     (_progName, _args) <- getArgsAndInitialize
     initialWindowSize $= Size 720 720
     _window <- createWindow "Life Game"
-    world <- newIORef ([(-37,33),(-37,32),(-36,33),(-36,32),(-27,33),(-27,32)
-                       ,(-27,31),(-26,34),(-26,30),(-25,35),(-25,29),(-24,35)
-                       ,(-24,29),(-23,32),(-22,34),(-22,30),(-21,33),(-21,32)
-                       ,(-21,31),(-20,32),(-17,35),(-17,34),(-17,33),(-16,35)
-                       ,(-16,34),(-16,33),(-15,36),(-15,32),(-13,37),(-13,36)
-                       ,(-13,32),(-13,31),(-3,35),(-3,34),(-2,35),(-2,34)]
-                       :: [(Double, Double)])
+    world <- newIORef $ map (\(x_,y_) -> (x + x_, y + y_)) (seed :: [(Double, Double)])
     time <- getCurrentTime
     tick <- newIORef time
     counter <- newIORef 0.0
     speed <- newIORef 1.0
+    frame <- newIORef 0.0
 
     keyboardMouseCallback $= Just (keyboardProc speed)
-    displayCallback $= display world tick speed counter
-    addTimerCallback timerInterval $ timerProc (display world tick speed counter)
+    displayCallback $= display world speed
+    idleCallback $= Just (idle display world tick speed counter frame)
 
     mainLoop
  
-display worldRef tickRef speedRef counterRef = do 
+display worldRef speedRef = do 
     clear [ColorBuffer]
     pointSize $= 8
-    tick <- readIORef tickRef
-    curr <- getCurrentTime
     
-    let diff = diffUTCTime curr tick
-
-    writeIORef tickRef (curr)
-    modifyIORef counterRef (+diff)
-
-    speed <- readIORef speedRef
-    counter <- readIORef counterRef
-
-    if speed <= counter then do
-        modifyIORef counterRef ((-) speed)
-        modifyIORef worldRef execute
-    else
-        return ()
 
     world <- readIORef worldRef
+    speed <- readIORef speedRef
 
     renderPrimitive Points $
         mapM_ (\(x, y) -> vertex $ Vertex2 (x / 40) (y / 40)) world
@@ -71,12 +67,40 @@ display worldRef tickRef speedRef counterRef = do
     
     flush
 
-timerProc act = do
-    act
-    addTimerCallback timerInterval $ timerProc act
+idle display worldRef tickRef speedRef counterRef frameRef = do
+    tick <- readIORef tickRef
+    curr <- getCurrentTime
+    
+    let diff = diffUTCTime curr tick
 
-keyboardProc speed ch state _ _
+    writeIORef tickRef (curr)
+    modifyIORef counterRef (+diff)
+    modifyIORef frameRef (+diff)
+
+    speed <- readIORef speedRef
+    counter <- readIORef counterRef
+    frame <- readIORef frameRef
+
+    if speed <= counter then do
+        modifyIORef counterRef ((-) speed)
+        modifyIORef worldRef execute
+    else
+        return ()
+
+    if frame > 0.0167 then do
+        modifyIORef frameRef ((-) 0.0167)
+        display worldRef speedRef
+    else
+        return ()
+
+keyboardProc speedRef ch state _ _
     | ch == Char 'q' = exitWith ExitSuccess
-    | ch == Char 'a' && state == Down = modifyIORef speed (*2.0)
-    | ch == Char 'd' && state == Down = modifyIORef speed (/2.0)
+    | ch == Char 'a' && state == Down = setSpeed (< 64.0) (* 2.0)
+    | ch == Char 'd' && state == Down = setSpeed (> 0.015625) (/ 2.0)
     | otherwise      = return ()
+        where setSpeed limit f = do 
+                speed <- readIORef speedRef
+                if limit speed then
+                    modifyIORef speedRef f
+                else
+                    return ()
