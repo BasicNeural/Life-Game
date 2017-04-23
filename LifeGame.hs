@@ -8,14 +8,11 @@ import qualified Data.Sequence              as S
 import qualified Data.Foldable              as F
 import qualified Data.ByteString.Lazy.Char8 as BS
 
-timerInterval = 17
-
 nearCell world (x, y) = length $ filter isNear world
     where isNear (new_x, new_y) = dist < 2 && dist >= 1
               where dist = sqrt $ (x - new_x)**2 + (y - new_y)**2
 
-execute world = filter (\(x,y) -> abs x < 40 && abs y < 40)
-              $ filter (willAlive (\x -> x == 2 || x == 3)) world 
+execute world = filter (willAlive (\x -> x == 2 || x == 3)) world 
                 `union` filter (willAlive (==3) ) deadCell
     where deadCell = foldl1' union $ map (\(x, y) -> 
                     [(x-1,y),(x+1,y),(x,y-1),(x,y+1),(x-1,y-1),(x+1,y-1)
@@ -31,10 +28,11 @@ main = do
     let centerList = head set
     let seedList = tail set
 
-    let (x,y) = ( read (centerList !! 0) :: Double , read (centerList !! 1) :: Double )
-    let seed = concat . map (\(x,ys) -> zip (iterate (\x->x) x) ys) . zip [0..] 
-                $ map (map fst . filter (\(_,x) -> x /= "") . zip [0..]) seedList
+    let (x,y) = ( (-1) * read (centerList !! 0) :: Double , (-1) * read (centerList !! 1) :: Double )
+    let seed = map (\(x,y)->(y,x)) . concat . map (\(x,ys) -> zip (iterate (\x->x) x) ys) . zip [0,-1..] 
+                $ map (map fst . filter (\(_,x) -> not (x == "" || x == "\r")) . zip [0..]) seedList
     
+
     (_progName, _args) <- getArgsAndInitialize
     initialWindowSize $= Size 720 720
     _window <- createWindow "Life Game"
@@ -44,6 +42,10 @@ main = do
     counter <- newIORef 0.0
     speed <- newIORef 1.0
     frame <- newIORef 0.0
+
+    a <- readIORef world
+
+    putStrLn . show $ a
 
     keyboardMouseCallback $= Just (keyboardProc speed)
     displayCallback $= display world speed
